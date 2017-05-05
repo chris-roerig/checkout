@@ -1,0 +1,92 @@
+#!/usr/bin/env ruby
+
+branch = ARGV.pop
+
+if branch.nil?
+  puts "Specify a branch"
+  exit
+end
+
+class Help
+  def self.print
+    puts "checkout {branch name}"
+    puts ""
+    puts "-h     # Show history"
+    puts "-hc    # Clear file"
+    puts "--help # Print this message"
+    puts ""
+  end
+end
+
+class History
+  PATH = File.path(File.join(File.expand_path("~"), ".co-history"))
+  TEMP_PATH = PATH + ".tmp"
+
+  def initialize_file
+    File.new(PATH, "w").close
+    true
+  end
+
+  def initialize
+    self.initialize_file unless File.exists?(PATH)
+  end
+
+  def write(content = "")
+    File.open(TEMP_PATH, "w") do |fo|
+      fo.puts "[#{Time.now.strftime("%m/%d/%Y %H:%M")}]    #{content}"
+      File.foreach(PATH) do |li|
+        fo.puts li
+      end
+    end
+
+    File.rename(TEMP_PATH, PATH)
+  end
+
+  def read
+    File.foreach(PATH) do |line|
+      puts line
+    end
+
+    true
+  end
+end
+
+def checkout(name)
+  return if name[0] == "*"
+  `git checkout #{name}`
+  History.new.write(name)
+end
+
+branch = branch.gsub(' ', '_').downcase
+
+# special cases
+Help.print and exit if branch == "--help"
+History.new.read and exit if branch == "-h"
+History.initialize_file and exit if branch == "-hc"
+checkout("-") and exit if branch == "-"
+checkout(".") and exit if branch == "."
+
+output = `git branch`
+branches = output.gsub(' ', '').split "\n"
+branches.select! { |b|  b.downcase.include? branch }
+
+case branches.size
+when 0
+  puts "No branches found containing: #{branch}"
+when 1
+  checkout(branches.first)
+else
+  puts "\nFound multiple branches:\n\n"
+  branches.each_with_index do |branch, key|
+    puts "#{key} - #{branch}"
+  end
+
+  print "\nChoose a number or anything else to cancel: "
+  selection = STDIN.gets.chomp
+
+  if selection.match(/\d/) && selection.to_i.between?(0, branches.size)
+    checkout(branches.at(selection.to_i))
+  else
+    puts "#{selection} is not a valid option"
+  end
+end
